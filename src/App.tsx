@@ -369,7 +369,7 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: '1rem', maxWidth: '500px', margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', color: '#2E7D32', marginBottom: '2rem' }}>🌱 Vibe Game</h1>
+      <h1 style={{ textAlign: 'center', color: '#2E7D32', marginBottom: '2rem' }}>Fun Facts 🌱 </h1>
       
       {appState === 'LOBBY' && renderLobby()}
       {(appState === 'CREATING' || appState === 'JOINING') && <p style={{ textAlign: 'center' }}>Loading...</p>}
