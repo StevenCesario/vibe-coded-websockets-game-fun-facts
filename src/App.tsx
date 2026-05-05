@@ -13,8 +13,8 @@ type GameState = {
   scoringResults?: Record<string, 'success' | 'failed'>; // NEW
 };
 
-// Connect to our backend
-const socket: Socket = io('http://localhost:3000');
+// Connect to our backend; now on Render!
+const socket: Socket = io('https://game-server-4l6f.onrender.com');
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('LOBBY');
