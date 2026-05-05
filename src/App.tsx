@@ -9,6 +9,8 @@ type GameState = {
   answers: Record<string, number>;
   sequence: Player[];
   askerIndex: number;
+  score?: number; // NEW
+  scoringResults?: Record<string, 'success' | 'failed'>; // NEW
 };
 
 // Connect to our backend
@@ -187,24 +189,36 @@ export default function App() {
   const renderGame = () => {
     if (!gameState) return null;
 
-    const { phase, currentQuestion, answers, sequence, askerIndex } = gameState;
+    const { phase, currentQuestion, answers, sequence, askerIndex, score, scoringResults } = gameState;
     const asker = players[askerIndex];
+    
+    // Check if socket.id exists first to keep TypeScript happy
     const hasAnswered = socket.id ? answers[socket.id] !== undefined : false;
-
+    
     // Check if my tile is currently placed in the sequence
     const haveIPlacedMyTile = sequence.some(p => p.id === socket.id);
     const allTilesPlaced = sequence.length === players.length;
 
     return (
       <div style={{ border: '2px solid #2196F3', padding: '1rem', borderRadius: '8px', backgroundColor: '#f3fdf5' }}>
-
+        
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <h2 style={{ fontSize: '1.2rem', color: '#333' }}>{currentQuestion}</h2>
-
+          
           <div style={{ backgroundColor: '#fff9c4', padding: '0.75rem', borderRadius: '8px', fontWeight: 'bold', display: 'inline-block', marginTop: '0.5rem', border: '1px solid #fbc02d' }}>
             🗣️ {asker?.id === socket.id ? "YOU get" : `${asker?.name} gets`} to ask a question!
           </div>
         </div>
+
+        {/* NEW: Team Score Banner */}
+        {phase === 'REVEALING' && score !== undefined && (
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '2px solid #4CAF50' }}>
+            <h2 style={{ color: '#2E7D32', margin: 0 }}>Team Score: {score} / {players.length}</h2>
+            <p style={{ margin: '0.5rem 0 0 0', color: '#555', fontWeight: 'bold' }}>
+              {score === players.length ? 'Perfect Score! 🎉' : 'Better luck next time!'}
+            </p>
+          </div>
+        )}
 
         {/* PHASE 1: ANSWERING */}
         {phase === 'ANSWERING' && (
@@ -214,15 +228,15 @@ export default function App() {
             ) : (
               <div>
                 <p style={{ marginBottom: '1rem', color: '#666' }}>Secretly lock in your number:</p>
-                <input
-                  type="number"
-                  value={myAnswer}
-                  onChange={(e) => setMyAnswer(e.target.value)}
-                  placeholder="0-100"
+                <input 
+                  type="number" 
+                  value={myAnswer} 
+                  onChange={(e) => setMyAnswer(e.target.value)} 
+                  placeholder="0-100" 
                   style={{ padding: '0.75rem', width: '100px', textAlign: 'center', marginRight: '10px', fontSize: '1.2rem' }}
                 />
-                <button
-                  onClick={submitAnswer}
+                <button 
+                  onClick={submitAnswer} 
                   disabled={!myAnswer}
                   style={{ padding: '0.75rem 1.5rem', cursor: myAnswer ? 'pointer' : 'not-allowed', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
                 >
@@ -236,19 +250,19 @@ export default function App() {
         {/* PHASE 2 & 3: PLACING AND REVEALING */}
         {(phase === 'PLACING' || phase === 'REVEALING') && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-
+            
             {phase === 'PLACING' && !haveIPlacedMyTile && (
               <p style={{ fontWeight: 'bold', color: '#1976d2', marginBottom: '0.5rem' }}>Drag your tile to the board!</p>
             )}
 
-            {/* UNPLACED TILE (Only shows if you haven't dropped it onto the board yet) */}
+            {/* UNPLACED TILE */}
             {phase === 'PLACING' && !haveIPlacedMyTile && (
-              <div
+              <div 
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData('text/plain', socket.id || '')}
-                style={{
-                  backgroundColor: '#2196F3', color: 'white', padding: '1rem 2rem',
-                  borderRadius: '8px', cursor: 'grab', marginBottom: '1.5rem',
+                style={{ 
+                  backgroundColor: '#2196F3', color: 'white', padding: '1rem 2rem', 
+                  borderRadius: '8px', cursor: 'grab', marginBottom: '1.5rem', 
                   fontWeight: 'bold', boxShadow: '0 4px 8px rgba(33, 150, 243, 0.3)',
                   border: '2px solid #1976d2'
                 }}
@@ -259,15 +273,15 @@ export default function App() {
 
             {/* THE TABLE */}
             <div style={{ width: '100%', backgroundColor: '#e0e0e0', padding: '1rem', borderRadius: '8px', minHeight: '200px' }}>
-
+              
               <div style={{ textAlign: 'center', color: '#888', fontSize: '0.8rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 Highest Numbers (Top)
               </div>
 
               {/* Drop Zone 0 (Top of the list) */}
               {phase === 'PLACING' && (
-                <div
-                  onDragOver={(e) => e.preventDefault()}
+                <div 
+                  onDragOver={(e) => e.preventDefault()} 
                   onDrop={(e) => handleDrop(e, 0)}
                   style={{ height: '20px', border: '2px dashed #aaa', margin: '4px 0', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.6)' }}
                 />
@@ -276,36 +290,52 @@ export default function App() {
               {sequence.map((player, index) => (
                 <React.Fragment key={player.id}>
                   {/* PLACED TILE */}
-                  <div
-                    draggable={phase === 'PLACING'}
-                    onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
-                    style={{
-                      backgroundColor: player.id === socket.id ? '#2196F3' : '#FF9800',
-                      color: 'white', padding: '1rem', borderRadius: '8px', margin: '4px 0',
-                      textAlign: 'center', position: 'relative', fontWeight: 'bold',
-                      cursor: phase === 'PLACING' ? 'grab' : 'default',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                    }}
-                  >
-                    {player.name}
+                  {(() => {
+                    const result = phase === 'REVEALING' && scoringResults ? scoringResults[player.id] : null;
+                    const isFailed = result === 'failed';
 
-                    {/* Only show the number when in the REVEALING phase */}
-                    {phase === 'REVEALING' && (
-                      <span style={{
-                        position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)',
-                        fontWeight: 'bold', backgroundColor: 'white', color: '#333',
-                        padding: '4px 10px', borderRadius: '12px', fontSize: '1.1rem',
-                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
-                      }}>
-                        {answers[player.id]}
-                      </span>
-                    )}
-                  </div>
+                    return (
+                      <div 
+                        draggable={phase === 'PLACING'}
+                        onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
+                        style={{ 
+                          // Turn failed tiles grey
+                          backgroundColor: isFailed ? '#9e9e9e' : (player.id === socket.id ? '#2196F3' : '#FF9800'), 
+                          color: isFailed ? '#e0e0e0' : 'white', 
+                          opacity: isFailed ? 0.8 : 1,
+                          padding: '1rem', borderRadius: '8px', margin: '4px 0', 
+                          textAlign: 'center', position: 'relative', fontWeight: 'bold',
+                          cursor: phase === 'PLACING' ? 'grab' : 'default',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        {/* Cross out the name and add emojis based on success/fail */}
+                        <span style={{ textDecoration: isFailed ? 'line-through' : 'none' }}>
+                          {player.name} {isFailed && '❌'} {result === 'success' && '✅'}
+                        </span>
+                        
+                        {/* Show the number when in the REVEALING phase */}
+                        {phase === 'REVEALING' && (
+                          <span style={{ 
+                            position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)',
+                            fontWeight: 'bold', 
+                            backgroundColor: isFailed ? '#ccc' : 'white', 
+                            color: isFailed ? '#666' : '#333', 
+                            padding: '4px 10px', borderRadius: '12px', fontSize: '1.1rem',
+                            textDecoration: isFailed ? 'line-through' : 'none',
+                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
+                          }}>
+                            {answers[player.id]}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Drop Zone (Below this tile) */}
                   {phase === 'PLACING' && (
-                    <div
-                      onDragOver={(e) => e.preventDefault()}
+                    <div 
+                      onDragOver={(e) => e.preventDefault()} 
                       onDrop={(e) => handleDrop(e, index + 1)}
                       style={{ height: '20px', border: '2px dashed #aaa', margin: '4px 0', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.6)' }}
                     />
@@ -326,13 +356,13 @@ export default function App() {
 
             {/* Admin Controls */}
             {phase === 'PLACING' && isAmAdmin && (
-              <button
-                onClick={triggerReveal}
+              <button 
+                onClick={triggerReveal} 
                 disabled={!allTilesPlaced}
-                style={{
-                  marginTop: '1.5rem', padding: '1rem',
-                  backgroundColor: allTilesPlaced ? '#E91E63' : '#ccc',
-                  color: 'white', width: '100%',
+                style={{ 
+                  marginTop: '1.5rem', padding: '1rem', 
+                  backgroundColor: allTilesPlaced ? '#E91E63' : '#ccc', 
+                  color: 'white', width: '100%', 
                   cursor: allTilesPlaced ? 'pointer' : 'not-allowed',
                   border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '1.1rem'
                 }}
@@ -342,18 +372,18 @@ export default function App() {
             )}
 
             {phase === 'REVEALING' && isAmAdmin && (
-              <button
-                onClick={nextRound}
-                style={{
-                  marginTop: '1.5rem', padding: '1rem',
-                  backgroundColor: '#9C27B0', color: 'white', width: '100%',
+              <button 
+                onClick={nextRound} 
+                style={{ 
+                  marginTop: '1.5rem', padding: '1rem', 
+                  backgroundColor: '#9C27B0', color: 'white', width: '100%', 
                   border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer'
                 }}
               >
                 Start Next Round
               </button>
             )}
-
+            
             {phase === 'REVEALING' && !isAmAdmin && (
               <div style={{ marginTop: '1.5rem', color: '#666', fontStyle: 'italic' }}>
                 Waiting for host to start the next round...
