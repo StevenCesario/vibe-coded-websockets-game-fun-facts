@@ -2,38 +2,40 @@ import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 type AppState = 'LOBBY' | 'CREATING' | 'JOINING' | 'IN_ROOM';
+type Player = { id: string; name: string };
 
-// Connect to our new backend
 const socket: Socket = io('http://localhost:3000');
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('LOBBY');
+  const [playerName, setPlayerName] = useState<string>(''); // NEW: Track the user's name
   const [roomCode, setRoomCode] = useState<string>('');
   const [joinInput, setJoinInput] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [playerCount, setPlayerCount] = useState<number>(1);
+  const [players, setPlayers] = useState<Player[]>([]); // NEW: Track list of players
 
   useEffect(() => {
-    // Listen for other players joining our room
-    socket.on('player_joined', (data) => {
-      console.log('Another player joined!', data);
-      setPlayerCount((prev) => prev + 1);
+    // Listen for ANY updates to the room's roster (joins or leaves)
+    socket.on('room_updated', (updatedPlayers: Player[]) => {
+      setPlayers(updatedPlayers);
     });
 
     return () => {
-      socket.off('player_joined');
+      socket.off('room_updated');
     };
   }, []);
 
   const createRoom = () => {
+    if (!playerName.trim()) return alert("Please enter a name first!");
+    
     setAppState('CREATING');
     setIsProcessing(true);
     
-    // Ask the server to create a room
-    socket.emit('create_room', (response: { success: boolean, roomCode: string }) => {
+    // Pass playerName to the server
+    socket.emit('create_room', playerName, (response: { success: boolean, roomCode: string, players: Player[] }) => {
       if (response.success) {
         setRoomCode(response.roomCode);
-        setPlayerCount(1);
+        setPlayers(response.players); // Set initial roster
         setIsProcessing(false);
         setAppState('IN_ROOM');
       }
@@ -41,21 +43,22 @@ export default function App() {
   };
 
   const joinRoom = (code: string) => {
+    if (!playerName.trim()) return alert("Please enter a name first!");
     if (!code) return;
+    
     setAppState('JOINING');
     setIsProcessing(true);
 
     const upperCode = code.toUpperCase();
 
-    // Ask the server to join this specific room
-    socket.emit('join_room', upperCode, (response: { success: boolean, error?: string }) => {
+    // Pass an object containing both the room code and their name
+    socket.emit('join_room', { roomCode: upperCode, playerName }, (response: { success: boolean, error?: string, players?: Player[] }) => {
       setIsProcessing(false);
       
-      if (response.success) {
+      if (response.success && response.players) {
         setRoomCode(upperCode);
+        setPlayers(response.players); // Set initial roster for the joiner
         setAppState('IN_ROOM');
-        // If we joined, we know there are at least 2 people (the creator + us)
-        setPlayerCount(2); 
       } else {
         alert(response.error || "Failed to join room");
         setAppState('LOBBY');
@@ -64,11 +67,11 @@ export default function App() {
   };
 
   const leaveRoom = () => {
+    socket.emit('leave_room', roomCode); // Tell server we are leaving
     setRoomCode('');
     setJoinInput('');
-    setPlayerCount(1);
+    setPlayers([]);
     setAppState('LOBBY');
-    // For a real app, you'd want to emit a 'leave_room' event here too!
   };
 
   return (
@@ -77,7 +80,19 @@ export default function App() {
 
       {appState === 'LOBBY' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <button onClick={createRoom} style={{ padding: '1rem', cursor: 'pointer' }}>
+          
+          <input 
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            placeholder="Enter Your Name"
+            style={{ padding: '0.5rem', fontSize: '1rem' }}
+          />
+
+          <button 
+            onClick={createRoom} 
+            disabled={!playerName.trim()}
+            style={{ padding: '1rem', cursor: playerName.trim() ? 'pointer' : 'not-allowed' }}
+          >
             CREATE ROOM
           </button>
           
@@ -87,14 +102,14 @@ export default function App() {
             <input 
               value={joinInput}
               onChange={(e) => setJoinInput(e.target.value)}
-              placeholder="Enter Room Code"
+              placeholder="Room Code"
               maxLength={4}
               style={{ padding: '0.5rem', flex: 1, textTransform: 'uppercase' }}
             />
             <button 
               onClick={() => joinRoom(joinInput)}
-              disabled={joinInput.length === 0}
-              style={{ padding: '0.5rem', cursor: joinInput.length ? 'pointer' : 'not-allowed' }}
+              disabled={joinInput.length === 0 || !playerName.trim()}
+              style={{ padding: '0.5rem', cursor: (joinInput.length && playerName.trim()) ? 'pointer' : 'not-allowed' }}
             >
               JOIN ROOM
             </button>
@@ -111,9 +126,17 @@ export default function App() {
       {appState === 'IN_ROOM' && (
         <div style={{ border: '2px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
           <h2>Room: {roomCode}</h2>
-          <p>Players in room: {playerCount}</p>
           
-          <button onClick={leaveRoom} style={{ marginTop: '2rem', padding: '0.5rem', cursor: 'pointer' }}>
+          <h3>Players:</h3>
+          <ul style={{ paddingLeft: '1.5rem' }}>
+            {players.map((player) => (
+              <li key={player.id}>
+                {player.name} {player.id === socket.id ? '(You)' : ''}
+              </li>
+            ))}
+          </ul>
+          
+          <button onClick={leaveRoom} style={{ marginTop: '2rem', padding: '0.5rem', cursor: 'pointer', width: '100%' }}>
             Leave Room
           </button>
         </div>
