@@ -39,9 +39,7 @@ export default function App() {
 
     socket.on('game_state_updated', (newState: GameState) => {
       setGameState(newState);
-      if (newState.phase === 'ANSWERING') {
-        setMyAnswer(''); // Clear input for the new round
-      }
+      // REMOVED: The if statement that was clearing the input
     });
 
     return () => {
@@ -100,6 +98,7 @@ export default function App() {
   const submitAnswer = () => {
     if (!myAnswer) return;
     socket.emit('submit_answer', { roomCode, answer: Number(myAnswer) });
+    setMyAnswer(''); // NEW: Clear it locally the moment they lock in
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
