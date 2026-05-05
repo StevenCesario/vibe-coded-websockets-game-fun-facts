@@ -9,12 +9,14 @@ type GameState = {
   answers: Record<string, number>;
   sequence: Player[];
   askerIndex: number;
-  score?: number; // NEW
-  scoringResults?: Record<string, 'success' | 'failed'>; // NEW
+  score?: number;
+  scoringResults?: Record<string, 'success' | 'failed'>;
 };
 
-// Connect to our backend; now on Render!
 const socket: Socket = io('https://game-server-4l6f.onrender.com');
+
+// Vibrant colors matching the board game tiles
+const tileColors = ['#FF4F79', '#FFD13B', '#00B388', '#00A6ED', '#9D4EDD', '#FF9800'];
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('LOBBY');
@@ -22,44 +24,30 @@ export default function App() {
   const [roomCode, setRoomCode] = useState<string>('');
   const [joinInput, setJoinInput] = useState<string>('');
   const [players, setPlayers] = useState<Player[]>([]);
-
+  
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [myAnswer, setMyAnswer] = useState<string>('');
 
   useEffect(() => {
-    socket.on('room_updated', (updatedPlayers: Player[]) => {
-      setPlayers(updatedPlayers);
-    });
-
+    socket.on('room_updated', setPlayers);
     socket.on('game_started', (initialState: GameState) => {
       setGameState(initialState);
       setAppState('IN_GAME');
       setMyAnswer('');
     });
-
-    socket.on('game_state_updated', (newState: GameState) => {
-      setGameState(newState);
-      // REMOVED: The if statement that was clearing the input
-    });
+    socket.on('game_state_updated', setGameState);
 
     return () => {
-      socket.off('room_updated');
-      socket.off('game_started');
-      socket.off('game_state_updated');
+      socket.off('room_updated'); socket.off('game_started'); socket.off('game_state_updated');
     };
   }, []);
-
-  // --- ACTIONS ---
 
   const createRoom = () => {
     if (!playerName.trim()) return alert("Please enter a name first!");
     setAppState('CREATING');
-
     socket.emit('create_room', playerName, (res: any) => {
       if (res.success) {
-        setRoomCode(res.roomCode);
-        setPlayers(res.players);
-        setAppState('IN_ROOM');
+        setRoomCode(res.roomCode); setPlayers(res.players); setAppState('IN_ROOM');
       }
     });
   };
@@ -69,26 +57,18 @@ export default function App() {
     if (!code) return;
     setAppState('JOINING');
     const upperCode = code.toUpperCase();
-
     socket.emit('join_room', { roomCode: upperCode, playerName }, (res: any) => {
       if (res.success) {
-        setRoomCode(upperCode);
-        setPlayers(res.players);
-        setAppState('IN_ROOM');
+        setRoomCode(upperCode); setPlayers(res.players); setAppState('IN_ROOM');
       } else {
-        alert(res.error || "Failed to join room");
-        setAppState('LOBBY');
+        alert(res.error || "Failed to join room"); setAppState('LOBBY');
       }
     });
   };
 
   const leaveRoom = () => {
     socket.emit('leave_room', roomCode);
-    setRoomCode('');
-    setJoinInput('');
-    setPlayers([]);
-    setGameState(null);
-    setAppState('LOBBY');
+    setRoomCode(''); setJoinInput(''); setPlayers([]); setGameState(null); setAppState('LOBBY');
   };
 
   const startGame = () => socket.emit('start_game', roomCode);
@@ -98,7 +78,7 @@ export default function App() {
   const submitAnswer = () => {
     if (!myAnswer) return;
     socket.emit('submit_answer', { roomCode, answer: Number(myAnswer) });
-    setMyAnswer(''); // NEW: Clear it locally the moment they lock in
+    setMyAnswer('');
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
@@ -107,80 +87,57 @@ export default function App() {
     socket.emit('place_tile', { roomCode, draggedPlayerId, targetIndex });
   };
 
-  // --- HELPERS ---
-
   const me = players.find(p => p.id === socket.id);
   const isAmAdmin = me?.isAdmin || false;
 
-  // --- RENDER FUNCTIONS ---
-
   const renderLobby = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <input
-        value={playerName}
-        onChange={(e) => setPlayerName(e.target.value)}
-        placeholder="Enter Your Name"
-        style={{ padding: '0.5rem', fontSize: '1rem', textAlign: 'center' }}
+    <div className="panel">
+      <input 
+        value={playerName} onChange={(e) => setPlayerName(e.target.value)}
+        placeholder="Enter Your Name" style={{ textAlign: 'center' }}
       />
-      <button
-        onClick={createRoom}
-        disabled={!playerName.trim()}
-        style={{ padding: '1rem', cursor: playerName.trim() ? 'pointer' : 'not-allowed', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
-      >
+      <button className="btn-primary" onClick={createRoom} disabled={!playerName.trim()}>
         CREATE ROOM
       </button>
-
-      <div style={{ textAlign: 'center', color: '#666', margin: '0.5rem 0' }}>— OR —</div>
-
+      
+      <div style={{ textAlign: 'center', color: '#A0AEC0', fontWeight: 'bold' }}>— OR —</div>
+      
       <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <input
-          value={joinInput}
-          onChange={(e) => setJoinInput(e.target.value)}
-          placeholder="Room Code"
-          maxLength={4}
-          style={{ padding: '0.5rem', flex: 1, textTransform: 'uppercase', textAlign: 'center' }}
+        <input 
+          value={joinInput} onChange={(e) => setJoinInput(e.target.value)}
+          placeholder="Code" maxLength={4} style={{ flex: 1, textTransform: 'uppercase', textAlign: 'center' }}
         />
-        <button
-          onClick={() => joinRoom(joinInput)}
-          disabled={joinInput.length === 0 || !playerName.trim()}
-          style={{ padding: '0.5rem', cursor: (joinInput.length && playerName.trim()) ? 'pointer' : 'not-allowed' }}
-        >
-          JOIN ROOM
+        <button className="btn-success" onClick={() => joinRoom(joinInput)} disabled={joinInput.length === 0 || !playerName.trim()}>
+          JOIN
         </button>
       </div>
     </div>
   );
 
   const renderInRoom = () => (
-    <div style={{ border: '2px solid #ccc', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
-      <h2 style={{ letterSpacing: '2px' }}>Room: {roomCode}</h2>
-
-      <h3 style={{ marginTop: '1.5rem' }}>Players ({players.length}/6):</h3>
-      <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0' }}>
+    <div className="panel" style={{ textAlign: 'center' }}>
+      <h2 style={{ letterSpacing: '2px', color: '#00A6ED' }}>Room: {roomCode}</h2>
+      
+      <h3>Players ({players.length}/6):</h3>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '1.2rem', fontWeight: 'bold' }}>
         {players.map((p) => (
-          <li key={p.id} style={{ margin: '0.5rem 0', fontSize: '1.1rem' }}>
+          <li key={p.id} style={{ margin: '0.5rem 0' }}>
             {p.name} {p.id === socket.id && '(You)'} {p.isAdmin && '👑'}
           </li>
         ))}
       </ul>
-
-      <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      
+      <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {isAmAdmin ? (
-          <button
-            onClick={startGame}
-            disabled={players.length < 2}
-            style={{ padding: '1rem', cursor: players.length >= 2 ? 'pointer' : 'not-allowed', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '1.1rem' }}
-          >
-            {players.length >= 2 ? 'Start Game' : 'Waiting for others...'}
+          <button className="btn-success" onClick={startGame} disabled={players.length < 2}>
+            {players.length >= 2 ? 'Start Game!' : 'Waiting for others...'}
           </button>
         ) : (
-          <div style={{ padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px', color: '#555' }}>
+          <div style={{ padding: '1rem', background: '#EDF2F7', borderRadius: '8px', color: '#718096', fontWeight: 'bold' }}>
             Waiting for host to start...
           </div>
         )}
-        <button onClick={leaveRoom} style={{ padding: '0.5rem', cursor: 'pointer', backgroundColor: 'transparent', border: '1px solid #ccc', borderRadius: '4px' }}>
-          Leave Room
-        </button>
+        <button className="btn-outline" onClick={leaveRoom}>Leave Room</button>
       </div>
     </div>
   );
@@ -190,57 +147,47 @@ export default function App() {
 
     const { phase, currentQuestion, answers, sequence, askerIndex, score, scoringResults } = gameState;
     const asker = players[askerIndex];
-    
-    // Check if socket.id exists first to keep TypeScript happy
     const hasAnswered = socket.id ? answers[socket.id] !== undefined : false;
-    
-    // Check if my tile is currently placed in the sequence
     const haveIPlacedMyTile = sequence.some(p => p.id === socket.id);
     const allTilesPlaced = sequence.length === players.length;
 
     return (
-      <div style={{ border: '2px solid #2196F3', padding: '1rem', borderRadius: '8px', backgroundColor: '#f3fdf5' }}>
+      <div className="panel">
         
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.2rem', color: '#333' }}>{currentQuestion}</h2>
-          
-          <div style={{ backgroundColor: '#fff9c4', padding: '0.75rem', borderRadius: '8px', fontWeight: 'bold', display: 'inline-block', marginTop: '0.5rem', border: '1px solid #fbc02d' }}>
-            🗣️ {asker?.id === socket.id ? "YOU get" : `${asker?.name} gets`} to ask a question!
+        <div style={{ textAlign: 'center' }}>
+          <div className="question-text">{currentQuestion}</div>
+          <div style={{ marginTop: '0.5rem' }}>
+            <span className="announcer">
+              🗣️ {asker?.id === socket.id ? "YOU get" : `${asker?.name} gets`} to ask a question!
+            </span>
           </div>
         </div>
 
-        {/* NEW: Team Score Banner */}
+        {/* SCORE BANNER */}
         {phase === 'REVEALING' && score !== undefined && (
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '2px solid #4CAF50' }}>
-            <h2 style={{ color: '#2E7D32', margin: 0 }}>Team Score: {score} / {players.length}</h2>
-            <p style={{ margin: '0.5rem 0 0 0', color: '#555', fontWeight: 'bold' }}>
-              {score === players.length ? 'Perfect Score! 🎉' : 'Better luck next time!'}
-            </p>
+          <div className="team-score">
+            <h2>Team Score: {score} / {players.length}</h2>
+            <p>{score === players.length ? 'Flawless Victory! 🎉' : 'Better luck next time!'}</p>
           </div>
         )}
 
         {/* PHASE 1: ANSWERING */}
         {phase === 'ANSWERING' && (
-          <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+          <div style={{ textAlign: 'center', padding: '1.5rem', background: '#F7FAFC', borderRadius: '12px' }}>
             {hasAnswered ? (
-              <p style={{ color: '#4CAF50', fontWeight: 'bold' }}>Answer locked. Waiting for others...</p>
+              <h3 style={{ color: 'var(--success)' }}>Locked in! Waiting for others...</h3>
             ) : (
               <div>
-                <p style={{ marginBottom: '1rem', color: '#666' }}>Secretly lock in your number:</p>
-                <input 
-                  type="number" 
-                  value={myAnswer} 
-                  onChange={(e) => setMyAnswer(e.target.value)} 
-                  placeholder="0-100" 
-                  style={{ padding: '0.75rem', width: '100px', textAlign: 'center', marginRight: '10px', fontSize: '1.2rem' }}
-                />
-                <button 
-                  onClick={submitAnswer} 
-                  disabled={!myAnswer}
-                  style={{ padding: '0.75rem 1.5rem', cursor: myAnswer ? 'pointer' : 'not-allowed', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
-                >
-                  Lock In
-                </button>
+                <p style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Secretly lock in your number:</p>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+                  <input 
+                    type="number" value={myAnswer} onChange={(e) => setMyAnswer(e.target.value)} 
+                    placeholder="0-100" style={{ width: '100px', textAlign: 'center' }}
+                  />
+                  <button className="btn-primary" onClick={submitAnswer} disabled={!myAnswer}>
+                    Lock In
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -248,160 +195,101 @@ export default function App() {
 
         {/* PHASE 2 & 3: PLACING AND REVEALING */}
         {(phase === 'PLACING' || phase === 'REVEALING') && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div>
             
             {phase === 'PLACING' && !haveIPlacedMyTile && (
-              <p style={{ fontWeight: 'bold', color: '#1976d2', marginBottom: '0.5rem' }}>Drag your tile to the board!</p>
-            )}
-
-            {/* UNPLACED TILE */}
-            {phase === 'PLACING' && !haveIPlacedMyTile && (
-              <div 
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('text/plain', socket.id || '')}
-                style={{ 
-                  backgroundColor: '#2196F3', color: 'white', padding: '1rem 2rem', 
-                  borderRadius: '8px', cursor: 'grab', marginBottom: '1.5rem', 
-                  fontWeight: 'bold', boxShadow: '0 4px 8px rgba(33, 150, 243, 0.3)',
-                  border: '2px solid #1976d2'
-                }}
-              >
-                {me?.name}'s Tile ➔ (Drag Me)
+              <div className="unplaced-tile-container">
+                <div 
+                  className="unplaced-tile"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData('text/plain', socket.id || '')}
+                >
+                  {me?.name}'s Tile (Drag Me!)
+                </div>
               </div>
             )}
 
             {/* THE TABLE */}
-            <div style={{ width: '100%', backgroundColor: '#e0e0e0', padding: '1rem', borderRadius: '8px', minHeight: '200px' }}>
-              
-              <div style={{ textAlign: 'center', color: '#888', fontSize: '0.8rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Highest Numbers (Top)
-              </div>
+            <div className="table-area">
+              <div className="table-label">Highest Numbers (Top)</div>
 
-              {/* Drop Zone 0 (Top of the list) */}
               {phase === 'PLACING' && (
-                <div 
-                  onDragOver={(e) => e.preventDefault()} 
-                  onDrop={(e) => handleDrop(e, 0)}
-                  style={{ height: '20px', border: '2px dashed #aaa', margin: '4px 0', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.6)' }}
-                />
+                <div className="drop-zone" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, 0)} />
               )}
 
-              {sequence.map((player, index) => (
-                <React.Fragment key={player.id}>
-                  {/* PLACED TILE */}
-                  {(() => {
-                    const result = phase === 'REVEALING' && scoringResults ? scoringResults[player.id] : null;
-                    const isFailed = result === 'failed';
+              {sequence.map((player, index) => {
+                const result = phase === 'REVEALING' && scoringResults ? scoringResults[player.id] : null;
+                const isFailed = result === 'failed';
+                
+                // Get a consistent color based on their original index in the players array
+                const colorIndex = players.findIndex(p => p.id === player.id) % tileColors.length;
+                const tileColor = tileColors[colorIndex];
 
-                    return (
-                      <div 
-                        draggable={phase === 'PLACING'}
-                        onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
-                        style={{ 
-                          // Turn failed tiles grey
-                          backgroundColor: isFailed ? '#9e9e9e' : (player.id === socket.id ? '#2196F3' : '#FF9800'), 
-                          color: isFailed ? '#e0e0e0' : 'white', 
-                          opacity: isFailed ? 0.8 : 1,
-                          padding: '1rem', borderRadius: '8px', margin: '4px 0', 
-                          textAlign: 'center', position: 'relative', fontWeight: 'bold',
-                          cursor: phase === 'PLACING' ? 'grab' : 'default',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                      >
-                        {/* Cross out the name and add emojis based on success/fail */}
-                        <span style={{ textDecoration: isFailed ? 'line-through' : 'none' }}>
-                          {player.name} {isFailed && '❌'} {result === 'success' && '✅'}
-                        </span>
-                        
-                        {/* Show the number when in the REVEALING phase */}
-                        {phase === 'REVEALING' && (
-                          <span style={{ 
-                            position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)',
-                            fontWeight: 'bold', 
-                            backgroundColor: isFailed ? '#ccc' : 'white', 
-                            color: isFailed ? '#666' : '#333', 
-                            padding: '4px 10px', borderRadius: '12px', fontSize: '1.1rem',
-                            textDecoration: isFailed ? 'line-through' : 'none',
-                            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
-                          }}>
-                            {answers[player.id]}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Drop Zone (Below this tile) */}
-                  {phase === 'PLACING' && (
+                return (
+                  <React.Fragment key={player.id}>
                     <div 
-                      onDragOver={(e) => e.preventDefault()} 
-                      onDrop={(e) => handleDrop(e, index + 1)}
-                      style={{ height: '20px', border: '2px dashed #aaa', margin: '4px 0', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.6)' }}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
+                      className={`tile ${phase === 'PLACING' ? 'draggable' : ''} ${isFailed ? 'tile-failed' : ''}`}
+                      draggable={phase === 'PLACING'}
+                      onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
+                      style={{ background: isFailed ? '' : tileColor }}
+                    >
+                      {player.name} {isFailed && '❌'} {result === 'success' && '✅'}
+                      
+                      {phase === 'REVEALING' && (
+                        <span className="tile-number">{answers[player.id]}</span>
+                      )}
+                    </div>
+
+                    {phase === 'PLACING' && (
+                      <div className="drop-zone" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, index + 1)} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
 
               {sequence.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#666', padding: '2rem 0', fontStyle: 'italic' }}>
+                <div style={{ textAlign: 'center', color: '#A0AEC0', padding: '2rem 0', fontWeight: 'bold' }}>
                   The table is empty. Drag a tile here!
                 </div>
               )}
 
-              <div style={{ textAlign: 'center', color: '#888', fontSize: '0.8rem', marginTop: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Lowest Numbers (Bottom)
-              </div>
+              <div className="table-label">Lowest Numbers (Bottom)</div>
             </div>
 
             {/* Admin Controls */}
             {phase === 'PLACING' && isAmAdmin && (
               <button 
-                onClick={triggerReveal} 
-                disabled={!allTilesPlaced}
-                style={{ 
-                  marginTop: '1.5rem', padding: '1rem', 
-                  backgroundColor: allTilesPlaced ? '#E91E63' : '#ccc', 
-                  color: 'white', width: '100%', 
-                  cursor: allTilesPlaced ? 'pointer' : 'not-allowed',
-                  border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '1.1rem'
-                }}
+                className="btn-reveal" 
+                onClick={triggerReveal} disabled={!allTilesPlaced}
+                style={{ width: '100%', marginTop: '1rem' }}
               >
-                {allTilesPlaced ? 'Reveal Cards!' : 'Waiting for everyone to place tiles...'}
+                {allTilesPlaced ? 'Reveal Cards!' : 'Waiting for everyone to place...'}
               </button>
             )}
 
             {phase === 'REVEALING' && isAmAdmin && (
-              <button 
-                onClick={nextRound} 
-                style={{ 
-                  marginTop: '1.5rem', padding: '1rem', 
-                  backgroundColor: '#9C27B0', color: 'white', width: '100%', 
-                  border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer'
-                }}
-              >
+              <button className="btn-next" onClick={nextRound} style={{ width: '100%', marginTop: '1rem' }}>
                 Start Next Round
               </button>
             )}
             
             {phase === 'REVEALING' && !isAmAdmin && (
-              <div style={{ marginTop: '1.5rem', color: '#666', fontStyle: 'italic' }}>
+              <div style={{ marginTop: '1.5rem', textAlign: 'center', color: '#A0AEC0', fontWeight: 'bold' }}>
                 Waiting for host to start the next round...
               </div>
             )}
-
           </div>
         )}
-
       </div>
     );
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: '1rem', maxWidth: '500px', margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', color: '#2E7D32', marginBottom: '2rem' }}>Fun Facts 🌱 </h1>
-
+    <div className="app-container">
+      <h1 className="logo">Fun Facts ✨</h1>
+      
       {appState === 'LOBBY' && renderLobby()}
-      {(appState === 'CREATING' || appState === 'JOINING') && <p style={{ textAlign: 'center' }}>Loading...</p>}
+      {(appState === 'CREATING' || appState === 'JOINING') && <h2 style={{ textAlign: 'center', color: 'white' }}>Loading...</h2>}
       {appState === 'IN_ROOM' && renderInRoom()}
       {appState === 'IN_GAME' && renderGame()}
     </div>
