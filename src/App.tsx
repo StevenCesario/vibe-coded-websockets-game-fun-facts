@@ -1,41 +1,46 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-type AppState = 'LOBBY' | 'CREATING' | 'JOINING' | 'IN_ROOM';
-type Player = { id: string; name: string };
+// NEW: Added 'IN_GAME' state
+type AppState = 'LOBBY' | 'CREATING' | 'JOINING' | 'IN_ROOM' | 'IN_GAME';
+// NEW: Added isAdmin to the Player type
+type Player = { id: string; name: string; isAdmin: boolean };
 
 const socket: Socket = io('http://localhost:3000');
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('LOBBY');
-  const [playerName, setPlayerName] = useState<string>(''); // NEW: Track the user's name
+  const [playerName, setPlayerName] = useState<string>('');
   const [roomCode, setRoomCode] = useState<string>('');
   const [joinInput, setJoinInput] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [players, setPlayers] = useState<Player[]>([]); // NEW: Track list of players
+  const [players, setPlayers] = useState<Player[]>([]);
 
   useEffect(() => {
-    // Listen for ANY updates to the room's roster (joins or leaves)
     socket.on('room_updated', (updatedPlayers: Player[]) => {
       setPlayers(updatedPlayers);
     });
 
+    // NEW: Listen for the signal that the admin started the game
+    socket.on('game_started', () => {
+      setAppState('IN_GAME');
+    });
+
     return () => {
       socket.off('room_updated');
+      socket.off('game_started');
     };
   }, []);
 
   const createRoom = () => {
     if (!playerName.trim()) return alert("Please enter a name first!");
-    
     setAppState('CREATING');
     setIsProcessing(true);
     
-    // Pass playerName to the server
     socket.emit('create_room', playerName, (response: { success: boolean, roomCode: string, players: Player[] }) => {
       if (response.success) {
         setRoomCode(response.roomCode);
-        setPlayers(response.players); // Set initial roster
+        setPlayers(response.players);
         setIsProcessing(false);
         setAppState('IN_ROOM');
       }
@@ -48,16 +53,13 @@ export default function App() {
     
     setAppState('JOINING');
     setIsProcessing(true);
-
     const upperCode = code.toUpperCase();
 
-    // Pass an object containing both the room code and their name
     socket.emit('join_room', { roomCode: upperCode, playerName }, (response: { success: boolean, error?: string, players?: Player[] }) => {
       setIsProcessing(false);
-      
       if (response.success && response.players) {
         setRoomCode(upperCode);
-        setPlayers(response.players); // Set initial roster for the joiner
+        setPlayers(response.players);
         setAppState('IN_ROOM');
       } else {
         alert(response.error || "Failed to join room");
@@ -66,13 +68,22 @@ export default function App() {
     });
   };
 
+  // NEW: Emit the start game event
+  const startGame = () => {
+    socket.emit('start_game', roomCode);
+  };
+
   const leaveRoom = () => {
-    socket.emit('leave_room', roomCode); // Tell server we are leaving
+    socket.emit('leave_room', roomCode);
     setRoomCode('');
     setJoinInput('');
     setPlayers([]);
     setAppState('LOBBY');
   };
+
+  // Find out if the current user is the admin
+  const me = players.find(p => p.id === socket.id);
+  const isAmAdmin = me?.isAdmin || false;
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '400px', margin: '0 auto' }}>
@@ -80,14 +91,12 @@ export default function App() {
 
       {appState === 'LOBBY' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
           <input 
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
             placeholder="Enter Your Name"
             style={{ padding: '0.5rem', fontSize: '1rem' }}
           />
-
           <button 
             onClick={createRoom} 
             disabled={!playerName.trim()}
@@ -95,9 +104,7 @@ export default function App() {
           >
             CREATE ROOM
           </button>
-          
           <hr style={{ width: '100%' }} />
-          
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input 
               value={joinInput}
@@ -127,17 +134,53 @@ export default function App() {
         <div style={{ border: '2px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
           <h2>Room: {roomCode}</h2>
           
-          <h3>Players:</h3>
+          <h3>Players ({players.length}/6):</h3>
           <ul style={{ paddingLeft: '1.5rem' }}>
             {players.map((player) => (
               <li key={player.id}>
-                {player.name} {player.id === socket.id ? '(You)' : ''}
+                {player.name} {player.id === socket.id && '(You)'} {player.isAdmin && '👑'}
               </li>
             ))}
           </ul>
           
+          {/* NEW: Admin Controls vs Guest View */}
+          <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {isAmAdmin ? (
+              <button 
+                onClick={startGame} 
+                disabled={players.length < 2}
+                style={{ padding: '0.75rem', cursor: players.length >= 2 ? 'pointer' : 'not-allowed', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold' }}
+              >
+                {players.length >= 2 ? 'Start Game' : 'Waiting for others...'}
+              </button>
+            ) : (
+              <div style={{ padding: '0.75rem', textAlign: 'center', backgroundColor: '#f0f0f0', borderRadius: '4px', color: '#555' }}>
+                Waiting for host to start...
+              </div>
+            )}
+
+            <button onClick={leaveRoom} style={{ padding: '0.5rem', cursor: 'pointer' }}>
+              Leave Room
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Game State */}
+      {appState === 'IN_GAME' && (
+        <div style={{ border: '2px solid #4CAF50', padding: '1rem', borderRadius: '8px', backgroundColor: '#e8f5e9' }}>
+          <h2>🎮 Game in Progress!</h2>
+          <p><strong>Room:</strong> {roomCode}</p>
+          
+          <h3>Playing:</h3>
+          <ul>
+            {players.map((player) => (
+              <li key={player.id}>{player.name} {player.isAdmin && '👑'}</li>
+            ))}
+          </ul>
+          
           <button onClick={leaveRoom} style={{ marginTop: '2rem', padding: '0.5rem', cursor: 'pointer', width: '100%' }}>
-            Leave Room
+            Leave Game
           </button>
         </div>
       )}
