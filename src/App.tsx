@@ -37,8 +37,20 @@ export default function App() {
     });
     socket.on('game_state_updated', setGameState);
 
+    // NEW: Listen for sudden disconnects
+    socket.on('disconnect', () => {
+      alert("Lost connection to the game server! The server may have restarted.");
+      setAppState('LOBBY');
+      setRoomCode('');
+      setPlayers([]);
+      setGameState(null);
+    });
+
     return () => {
-      socket.off('room_updated'); socket.off('game_started'); socket.off('game_state_updated');
+      socket.off('room_updated'); 
+      socket.off('game_started'); 
+      socket.off('game_state_updated');
+      socket.off('disconnect');
     };
   }, []);
 
