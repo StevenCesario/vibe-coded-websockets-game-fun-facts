@@ -43,8 +43,30 @@ const questions = [
   "How likely are you to hit 'snooze' instead of getting up immediately? (0-100)",
   "How much do you care about having the latest technology or gadgets? (0-100)",
 
+  // Rate yourself
+  "Rate your music taste (0-100)",
+  "Rate your ability to speak in an 'Östgötska' accent (0-100)",
+  "Rate your taste in alcohol (0-100)",
+  "Rate your cooking skills (0-100)",
+  "Rate your ability to handle a crisis without panicking (0-100)",
+  "Rate your drip",
+  "Rate how good of a driver you think you are compared to the rest of the group (0-100)",
+
+  // Alcohol, drugs and tobacco
+  "How likely would you be to try heroine? (0-100)",
+  "How likely would you be to try LSD? (0-100)",
+  "How much would you need to be paid to spend this Friday drinking with the local drunks? (0-100)",
+  "How many Jaeger shots could you down before passing out?",
+  "How many 33cl beers does it take for you to go from tipsy to drunk?",
+  "How many hours does your typical hangover last when you overdo it?",
+  "How likely are you to be the first person to fall asleep at a party? (0-100)",
+  "How many drugs have you tried?",
+  "How likely would you be to to try the shoey for free? (0-100)",
+  "Approximately how many brands of beer have you tried?",
+  "How much do you estimate you would spend if you visited the local club this Saturday?",
+
   // Moral dilemmas
-  "How likely would you be to kill a pedophile if you had the chance?",
+  "How likely would you be to kill a pedophile if you had the chance? (0-100)",
   "How likely would you be to pull the lever in the trolley problem? (Kill one person to save 5)",
   
   // New Quantities, Time limits & Durations
@@ -53,7 +75,6 @@ const questions = [
   "What is the maximum number of seconds the '5-second rule' applies to for a dropped piece of food?",
   "How many minutes does it typically take you to get ready in the morning?",
   "How many days do you think you could survive in the wilderness completely alone?",
-  "How many hours could you spend wandering around IKEA or Target without going crazy?",
   "What is the longest you've ever gone without taking a shower? (Days)",
   "How many minutes past the start time is it acceptable to show up to a casual party?",
 ];
