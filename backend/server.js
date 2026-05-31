@@ -197,7 +197,23 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. Handle STARTING NEXT ROUND
+  // 7. Handle SKIPPING A QUESTION (Admin only)
+  socket.on('skip_question', (roomCode) => {
+    const room = rooms[roomCode];
+    if (!room || !room.gameState) return;
+    if (!room.players.find(p => p.id === socket.id)?.isAdmin) return;
+
+    room.gameState = {
+      phase: 'ANSWERING',
+      currentQuestion: questions[Math.floor(Math.random() * questions.length)],
+      answers: {},
+      sequence: [],
+      askerIndex: room.gameState.askerIndex,
+    };
+    io.to(roomCode).emit('game_state_updated', room.gameState);
+  });
+
+  // 8. Handle STARTING NEXT ROUND
   socket.on('next_round', (roomCode) => {
     const room = rooms[roomCode];
     if (!room || !room.gameState) return;

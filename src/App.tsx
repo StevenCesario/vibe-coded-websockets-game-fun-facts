@@ -27,6 +27,7 @@ export default function App() {
   
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [myAnswer, setMyAnswer] = useState<string>('');
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   useEffect(() => {
     socket.on('room_updated', setPlayers);
@@ -86,6 +87,7 @@ export default function App() {
   const startGame = () => socket.emit('start_game', roomCode);
   const nextRound = () => socket.emit('next_round', roomCode);
   const triggerReveal = () => socket.emit('reveal_cards', roomCode);
+  const skipQuestion = () => { socket.emit('skip_question', roomCode); setShowSkipModal(false); };
 
   const submitAnswer = () => {
     if (!myAnswer) return;
@@ -192,8 +194,8 @@ export default function App() {
               <div>
                 <p style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Secretly lock in your number:</p>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                  <input 
-                    type="number" value={myAnswer} onChange={(e) => setMyAnswer(e.target.value)} 
+                  <input
+                    type="number" value={myAnswer} onChange={(e) => setMyAnswer(e.target.value)}
                     placeholder="0-100" style={{ width: '100px', textAlign: 'center' }}
                   />
                   <button className="btn-primary" onClick={submitAnswer} disabled={!myAnswer}>
@@ -201,6 +203,22 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            )}
+            {isAmAdmin && (
+              <button
+                onClick={() => setShowSkipModal(true)}
+                style={{
+                  marginTop: '1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: '#A0AEC0',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                Skip question
+              </button>
             )}
           </div>
         )}
@@ -292,6 +310,32 @@ export default function App() {
             )}
           </div>
         )}
+      {/* SKIP QUESTION MODAL */}
+      {showSkipModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '2rem',
+            maxWidth: '320px', width: '90%', textAlign: 'center',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+          }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Skip this question?</h3>
+            <p style={{ color: '#718096', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+              A new question will be dealt to everyone.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button className="btn-outline" onClick={() => setShowSkipModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={skipQuestion}>
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   };
